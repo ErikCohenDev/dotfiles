@@ -1,0 +1,18 @@
+# Ignore sensitive files
+.env
+.env.local
+*.local
+*.pem
+*.key
+
+# Ignore backup files
+*~
+*.bak
+*.swp
+
+# Machine-specific files
+.zshrc.local
+.DS_Store
+
+# Generated files
+.cache/

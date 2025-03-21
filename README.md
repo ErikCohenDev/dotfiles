@@ -1,11 +1,12 @@
 # Secure Dotfiles with Bitwarden Secret Management
 
-A minimalist, secure dotfiles repository with integrated Bitwarden secret management.
+A minimalist, secure dotfiles repository with integrated Bitwarden secret management and developer workflow tools.
 
 ## 🔑 Key Features
 
 - **Secure API Key Management**: Store and retrieve API keys via Bitwarden CLI
 - **Secure Environment Variables**: Prevent leaks through history and process listing
+- **Development Workflow Tools**: Integrated Jira and GitHub tools for efficient development
 - **Minimal Configuration**: Focus on essential tools (ZSH, Neovim, Git)
 - **Easy Deployment**: Simple installation script with automatic backups
 
@@ -32,6 +33,7 @@ A minimalist, secure dotfiles repository with integrated Bitwarden secret manage
 - ✅ Clear error messages
 - ✅ Comprehensive help system
 - ✅ Automatic backups
+- ✅ Streamlined development workflow
 
 ### Portability
 
@@ -66,7 +68,13 @@ A minimalist, secure dotfiles repository with integrated Bitwarden secret manage
    security add-generic-password -s "BitwardenClientSecret" -a "$USER" -w
    ```
 
-4. Reload your shell:
+4. Ensure `~/bin` is in your PATH:
+
+   ```bash
+   echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc.local
+   ```
+
+5. Reload your shell:
    ```bash
    source ~/.zshrc
    ```
@@ -97,14 +105,48 @@ View all available commands:
 bwhelp
 ```
 
-## 🚀 Customization
+## 🚀 Development Workflow Tools
+
+### Initial Setup
+
+First, run the configuration tool to set up your Jira and GitHub credentials:
+
+```bash
+dev-workflow
+```
+
+Select "Configure" from the menu and follow the prompts.
+
+### Using Development Workflow
+
+The workflow tool integrates Jira and GitHub operations:
+
+```bash
+# View available tickets in current sprint
+jira-tool view-tickets
+
+# Start work on a ticket
+dev-workflow
+# Choose "Select ticket" then "Create branch"
+
+# After making code changes
+dev-workflow
+# Choose "Commit changes" then "Push and create PR"
+```
+
+### Individual Tools
+
+You can also use the individual tools:
+
+- **jira-tool**: For ticket management
+- **github-tool**: For Git operations
+
+## 🔧 Customization
 
 Add local customizations:
 
 - ZSH: Create `~/.zshrc.local` (not tracked by git)
 - Git: Create `~/.gitconfig.local` (not tracked by git)
-  The repository contains a template `.gitconfig` that includes a local config file.
-  Create `~/.gitconfig.local` with your personal information:
   ```ini
   [user]
      name = Your Name
@@ -116,6 +158,7 @@ Add local customizations:
 
 - **Bitwarden Secret Manager**: Secure API key management
 - **ZSH Configuration**: Shell setup with security features
+- **Development Workflow Tools**: Jira and GitHub integration
 - **Neovim Configuration**: Modern editor setup
 - **Git Configuration**: Version control defaults and aliases
 - **Installation Script**: Easy deployment with backups
@@ -133,3 +176,9 @@ Add local customizations:
 - [Bitwarden CLI](https://bitwarden.com/help/cli/)
 - [jq](https://stedolan.github.io/jq/)
 - macOS `security` command (pre-installed)
+- [GitHub CLI](https://cli.github.com/) (optional, for PR creation)
+- `curl` (for Jira API calls)
+
+## 🤝 Contributing
+
+Please see CONTRIBUTING.md for details on how to contribute to this project.

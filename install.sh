@@ -27,6 +27,9 @@ echo "🚀 Setting up dotfiles..."
 
 # Create directories if needed
 mkdir -p "$HOME/.config/nvim"
+mkdir -p "$HOME/bin"
+mkdir -p "$HOME/.config/dev-tools"
+mkdir -p "$HOME/.cache/dev-tools"
 
 # ZSH configuration
 link_file "$DOTFILES_DIR/home/.zshrc" "$HOME/.zshrc"
@@ -37,6 +40,17 @@ link_file "$DOTFILES_DIR/scripts/bw-secret-manager.sh" "$HOME/.bw-secret-manager
 # History Manager
 link_file "$DOTFILES_DIR/scripts/history-manager.sh" "$HOME/.history-manager.sh"
 
+# Development Tools
+link_file "$DOTFILES_DIR/scripts/dev-tools/workflow.sh" "$HOME/bin/dev-workflow"
+link_file "$DOTFILES_DIR/scripts/dev-tools/jira.sh" "$HOME/bin/jira-tool"
+link_file "$DOTFILES_DIR/scripts/dev-tools/github.sh" "$HOME/bin/github-tool"
+
+# Make the tools executable
+chmod +x "$DOTFILES_DIR/scripts/dev-tools/workflow.sh"
+chmod +x "$DOTFILES_DIR/scripts/dev-tools/jira.sh"
+chmod +x "$DOTFILES_DIR/scripts/dev-tools/github.sh"
+chmod +x "$DOTFILES_DIR/scripts/dev-tools/core.sh"
+
 # Git config
 link_file "$DOTFILES_DIR/home/.gitconfig" "$HOME/.gitconfig"
 
@@ -44,4 +58,6 @@ link_file "$DOTFILES_DIR/home/.gitconfig" "$HOME/.gitconfig"
 link_file "$DOTFILES_DIR/config/nvim/init.lua" "$HOME/.config/nvim/init.lua"
 
 echo "✅ Dotfiles linked successfully!"
+echo "✅ Development tools installed!"
+echo "🔍 Make sure ~/bin is in your PATH to use the dev tools"
 echo "🔄 Please restart your terminal or run 'source ~/.zshrc' to apply changes."

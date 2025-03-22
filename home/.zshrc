@@ -21,20 +21,7 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# Source security management modules - load early to ensure protection
-if [ -f ~/.bw-secret-manager.sh ]; then
-  source ~/.bw-secret-manager.sh
-fi
-
-if [ -f ~/.history-manager.sh ]; then
-  source ~/.history-manager.sh
-fi
-
-# Load Oh My Zsh and Powerlevel10k configuration
-source $ZSH/oh-my-zsh.sh
-[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
-
-# Enable plugins
+# Define plugins BEFORE loading Oh My Zsh
 plugins=(
   git
   fzf
@@ -42,6 +29,19 @@ plugins=(
   zsh-syntax-highlighting
   zsh-autosuggestions
 )
+
+# Load Oh My Zsh first to set up environment
+source $ZSH/oh-my-zsh.sh
+[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
+# AFTER Oh My Zsh, load security tools
+if [ -f ~/.bw-secret-manager.sh ]; then
+  source ~/.bw-secret-manager.sh
+fi
+
+if [ -f ~/.history-manager.sh ]; then
+  source ~/.history-manager.sh
+fi
 
 # Add dotfiles directory to PATH for custom scripts
 if [ -d ~/dotfiles/scripts ]; then
@@ -52,4 +52,3 @@ fi
 if [ -f ~/.zshrc.local ]; then
   source ~/.zshrc.local
 fi
-

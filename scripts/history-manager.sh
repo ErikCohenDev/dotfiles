@@ -1,21 +1,17 @@
 #!/bin/bash
 #
 # History Manager - Prevent leaks of sensitive information in shell history
-#
-# This script provides functions to better manage shell history and prevent
-# accidental leakage of API keys, tokens, and other sensitive information.
+# Version: 2.0 - Safer implementation that preserves history
 
 ##########################
 # History Configuration
 ##########################
 
-# History storage settings (overrides zsh defaults if needed)
-export HISTSIZE=10000                # Lines of history to keep in memory
-export SAVEHIST=10000                # Lines of history to save to disk
-export HISTFILE=~/.zsh_history       # History file location
+# DON'T override ZSH's history settings - only augment them
+# Let Oh My Zsh manage the history file and sizes
 
-# These patterns will be excluded from history (in addition to existing HISTORY_IGNORE)
-SENSITIVE_PATTERNS=(
+# Define sensitive patterns for history exclusion
+_SENSITIVE_PATTERNS=(
   "*key=*" "*KEY=*"
   "*token=*" "*TOKEN=*"
   "*secret=*" "*SECRET=*"
@@ -30,143 +26,193 @@ SENSITIVE_PATTERNS=(
   "*Bearer *"
 )
 
-# Combine with existing patterns if any
-if [[ -z "$HISTORY_IGNORE" ]]; then
-  HISTORY_IGNORE_LIST="${SENSITIVE_PATTERNS[@]}"
-else
-  HISTORY_IGNORE_LIST="$HISTORY_IGNORE|${SENSITIVE_PATTERNS[@]}"
-fi
+# SAFER pattern handling that won't break history
+# Add our patterns to ZSH's HISTORY_IGNORE without overriding it
+_add_history_ignore_patterns() {
+  # Create a proper ZSH pattern string with | as separator
+  local patterns_str
+  patterns_str=$(printf "|%s" "${_SENSITIVE_PATTERNS[@]}")
+  patterns_str=${patterns_str:1}  # Remove leading |
 
-# Convert array to pipe-delimited string for HISTORY_IGNORE
-HISTORY_IGNORE_LIST=${HISTORY_IGNORE_LIST// /|}
-export HISTORY_IGNORE="($HISTORY_IGNORE_LIST)"
+  # Only set if ZSH is active (avoid errors in other shells)
+  if [[ -n "$ZSH_VERSION" ]]; then
+    # Append to existing patterns if any
+    if [[ -z "$HISTORY_IGNORE" ]]; then
+      export HISTORY_IGNORE="($patterns_str)"
+    else
+      # Only add if not already there (prevent duplication)
+      if [[ "$HISTORY_IGNORE" != *"$patterns_str"* ]]; then
+        export HISTORY_IGNORE="${HISTORY_IGNORE%)}|$patterns_str)"
+      fi
+    fi
+
+    # Let ZSH know something changed
+    fc -R
+  fi
+}
+
+# Apply the patterns safely
+_add_history_ignore_patterns
 
 ##########################
 # History Management Functions
 ##########################
 
-# Clean sensitive information from history
+# Clean sensitive information from history - safe implementation
 histclean() {
   echo "🧹 Cleaning shell history of sensitive patterns..."
 
-  local BACKUP_FILE="$HISTFILE.bak"
+  # Safety checks
+  if [[ ! -f "$HISTFILE" ]]; then
+    echo "❌ History file not found: $HISTFILE"
+    return 1
+  fi
+
+  local BACKUP_FILE="$HISTFILE.bak.$(date +%Y%m%d-%H%M%S)"
   cp "$HISTFILE" "$BACKUP_FILE"
 
-  # Build a properly escaped grep pattern
+  # Build the grep pattern safely
   local GREP_PATTERN=""
-  for pattern in "${SENSITIVE_PATTERNS[@]}"; do
-    # Escape regex metacharacters and convert shell globs to regex
-    pattern=$(echo "$pattern" | sed 's/[][^$.*+?(){}|\\]/\\&/g' | sed 's/\\\*/\.\*/g')
+  for pattern in "${_SENSITIVE_PATTERNS[@]}"; do
+    # Convert glob patterns to regular expressions
+    local regex_pattern=$(echo "$pattern" | sed 's/\*/\\*/g')
+    regex_pattern=$(echo "$regex_pattern" | sed 's/\*/.*/g')
 
     if [[ -z "$GREP_PATTERN" ]]; then
-      GREP_PATTERN="$pattern"
+      GREP_PATTERN="$regex_pattern"
     else
-      GREP_PATTERN="$GREP_PATTERN|$pattern"
+      GREP_PATTERN="$GREP_PATTERN|$regex_pattern"
     fi
   done
 
-  grep -v -E "$GREP_PATTERN" "$BACKUP_FILE" > "$HISTFILE" 2>/dev/null || cp "$BACKUP_FILE" "$HISTFILE"
+  # Use temporary file for safe processing
+  local TEMP_FILE=$(mktemp)
+  grep -v -E "$GREP_PATTERN" "$BACKUP_FILE" > "$TEMP_FILE" 2>/dev/null
 
-  # Reload history
-  fc -R "$HISTFILE"
+  # Only replace if grep was successful and file is not empty
+  if [[ $? -eq 0 && -s "$TEMP_FILE" ]]; then
+    cp "$TEMP_FILE" "$HISTFILE"
+    rm "$TEMP_FILE"
 
-  echo "✅ History cleaned! Backup saved at $BACKUP_FILE"
+    # Reload history without clearing current session
+    fc -R "$HISTFILE"
+
+    echo "✅ History cleaned! Backup saved at $BACKUP_FILE"
+  else
+    rm "$TEMP_FILE"
+    echo "⚠️ Error in pattern matching or empty result. History unchanged."
+    echo "   Your backup is at $BACKUP_FILE"
+  fi
 }
 
-# Delete history entirely and start fresh
+# Audit history without modifying it
+histaudit() {
+  echo "🔍 Auditing history for potentially sensitive information..."
+
+  # Safety check
+  if [[ ! -f "$HISTFILE" ]]; then
+    echo "❌ History file not found: $HISTFILE"
+    return 1
+  fi
+
+  # Build the grep pattern safely
+  local GREP_PATTERN=""
+  for pattern in "${_SENSITIVE_PATTERNS[@]}"; do
+    # Convert glob patterns to regular expressions
+    local regex_pattern=$(echo "$pattern" | sed 's/\*/\\*/g')
+    regex_pattern=$(echo "$regex_pattern" | sed 's/\*/.*/g')
+
+    if [[ -z "$GREP_PATTERN" ]]; then
+      GREP_PATTERN="$regex_pattern"
+    else
+      GREP_PATTERN="$GREP_PATTERN|$regex_pattern"
+    fi
+  done
+
+  local count=$(grep -E "$GREP_PATTERN" "$HISTFILE" 2>/dev/null | wc -l)
+
+  if [[ $count -gt 0 ]]; then
+    echo "⚠️ Found $count potentially sensitive entries in history."
+    echo "To see them, run: grep -E \"$GREP_PATTERN\" \"$HISTFILE\""
+    echo "To clean them, run: histclean"
+  else
+    echo "✅ No sensitive patterns found in history."
+  fi
+}
+
+# Run a command privately (without recording in history)
+private() {
+  if [[ $# -eq 0 ]]; then
+    echo "Usage: private <command>"
+    echo "Runs a command without recording it in history"
+    return 1
+  fi
+
+  # Save current history file
+  local OLD_HISTFILE="$HISTFILE"
+  # Temporarily disable history
+  HISTFILE=/dev/null
+
+  echo "🔒 Running command privately: $@"
+  eval "$@"
+  local result=$?
+
+  # Restore history file
+  HISTFILE="$OLD_HISTFILE"
+
+  echo "✅ Command completed with status: $result"
+  return $result
+}
+
+# Reset history (with confirmation) - EXPLICIT USER ACTION ONLY
 histreset() {
-  local BACKUP_FILE="$HISTFILE.bak.$(date +%Y%m%d-%H%M%S)"
+  echo "⚠️ WARNING: This will PERMANENTLY DELETE your command history!"
+  echo "    Your current history will be backed up first."
+  read -p "Are you SURE you want to continue? (type 'yes' to confirm): " confirm
 
-  echo "⚠️  Warning: This will delete your current history!"
-  read -q "REPLY?Are you sure you want to continue? (y/n) "
-  echo
+  if [[ "$confirm" != "yes" ]]; then
+    echo "🛑 Operation canceled."
+    return 1
+  fi
 
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Backup current history
+  local BACKUP_FILE="$HISTFILE.RESET.$(date +%Y%m%d-%H%M%S)"
+
+  if [[ -f "$HISTFILE" ]]; then
     cp "$HISTFILE" "$BACKUP_FILE"
+    echo "📁 History backed up to: $BACKUP_FILE"
 
     # Clear history file
     echo -n > "$HISTFILE"
 
-    # Clear current session history
-    history -c
-
-    echo "✅ History reset! Backup saved at $BACKUP_FILE"
-  else
-    echo "🛑 Operation canceled."
-  fi
-}
-
-# Run a command without recording it in history
-private() {
-  # Save current HISTFILE and disable history
-  local OLD_HISTFILE="$HISTFILE"
-  HISTFILE=/dev/null
-
-  echo "🔒 Running command with history disabled..."
-
-  # Execute the command
-  eval "$@"
-
-  # Restore history settings
-  HISTFILE="$OLD_HISTFILE"
-
-  echo "✅ Command executed. Nothing was recorded in history."
-}
-
-# Check history for potentially sensitive information
-histaudit() {
-  echo "🔍 Auditing history for potentially sensitive information..."
-
-  # Build a properly escaped grep pattern
-  local GREP_PATTERN=""
-  for pattern in "${SENSITIVE_PATTERNS[@]}"; do
-    # Escape regex metacharacters and convert shell globs to regex
-    pattern=$(echo "$pattern" | sed 's/[][^$.*+?(){}|\\]/\\&/g' | sed 's/\\\*/\.\*/g')
-
-    if [[ -z "$GREP_PATTERN" ]]; then
-      GREP_PATTERN="$pattern"
-    else
-      GREP_PATTERN="$GREP_PATTERN|$pattern"
+    # Clear current session history if in ZSH
+    if [[ -n "$ZSH_VERSION" ]]; then
+      history -c
+      fc -R
     fi
-  done
 
-  local RESULTS=$(grep -E "$GREP_PATTERN" "$HISTFILE" 2>/dev/null || echo "")
-
-  if [[ -n "$RESULTS" ]]; then
-    echo "⚠️  Found potentially sensitive information in history:"
-    echo "$RESULTS"
-    echo "Consider running 'histclean' to remove these entries."
+    echo "✅ History has been reset."
   else
-    echo "✅ No obvious sensitive information found in history."
+    echo "❌ History file not found: $HISTFILE"
+    return 1
   fi
 }
-
-##########################
-# Helper Functions
-##########################
 
 # Show help for history management
 histhelp() {
   cat <<EOF
-History Management Help:
+🔒 History Protection Tool
 
-🧹 Cleaning Functions:
-  histclean      - Clean sensitive information from history
-  histreset      - Delete history entirely and start fresh
-  histaudit      - Check history for potentially sensitive information
-
-🔒 Preventive Functions:
-  private        - Run a command without recording it in history
-                   Example: private aws configure
-
-📋 Information:
+Commands:
+  histaudit      - Check history for sensitive information
+  histclean      - Safely remove sensitive entries from history
+  private <cmd>  - Run a command without recording it in history
+  histreset      - Delete all history (requires confirmation)
   histhelp       - Show this help message
 
-To use these functions, simply source this script in your .zshrc:
-  source ~/.history-manager.sh
+Protection status:
+  ${#_SENSITIVE_PATTERNS[@]} patterns are currently being blocked from history
 EOF
 }
 
-# Alert user that history management is enabled
-echo "🔒 History protection enabled ($(echo ${#SENSITIVE_PATTERNS[@]}) patterns blocked)"
+# Only show a simple message on load, don't disrupt terminal startup
+echo "🔒 History protection active (${#_SENSITIVE_PATTERNS[@]} patterns blocked)"

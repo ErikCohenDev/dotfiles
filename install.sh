@@ -45,11 +45,15 @@ link_file "$DOTFILES_DIR/scripts/dev-tools/workflow.sh" "$HOME/bin/dev-workflow"
 link_file "$DOTFILES_DIR/scripts/dev-tools/jira.sh" "$HOME/bin/jira-tool"
 link_file "$DOTFILES_DIR/scripts/dev-tools/github.sh" "$HOME/bin/github-tool"
 
+# LLM Tools
+link_file "$DOTFILES_DIR/scripts/llm-tools.sh" "$HOME/.llm-tools.sh"
+
 # Make the tools executable
 chmod +x "$DOTFILES_DIR/scripts/dev-tools/workflow.sh"
 chmod +x "$DOTFILES_DIR/scripts/dev-tools/jira.sh"
 chmod +x "$DOTFILES_DIR/scripts/dev-tools/github.sh"
 chmod +x "$DOTFILES_DIR/scripts/dev-tools/core.sh"
+chmod +x "$DOTFILES_DIR/scripts/llm-tools.sh"
 
 # Git config
 link_file "$DOTFILES_DIR/home/.gitconfig" "$HOME/.gitconfig"

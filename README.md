@@ -57,6 +57,11 @@ A minimalist, secure dotfiles repository with integrated Bitwarden secret manage
    ./install.sh
    ```
 
+   Optional:
+
+   - Dry-run (preview actions): `./install.sh --dry-run`
+   - Link legacy interactive tools: `INSTALL_LEGACY_TOOLS=1 ./install.sh`
+
 3. Set up Bitwarden credentials:
 
    ```bash
@@ -107,39 +112,28 @@ bwhelp
 
 ## 🚀 Development Workflow Tools
 
-### Initial Setup
+### Unified CLI (Recommended)
 
-First, run the configuration tool to set up your Jira and GitHub credentials:
-
-```bash
-dev-workflow
-```
-
-Select "Configure" from the menu and follow the prompts.
-
-### Using Development Workflow
-
-The workflow tool integrates Jira and GitHub operations:
+The `dev` command provides concise subcommands:
 
 ```bash
-# View available tickets in current sprint
-jira-tool view-tickets
-
-# Start work on a ticket
-dev-workflow
-# Choose "Select ticket" then "Create branch"
-
-# After making code changes
-dev-workflow
-# Choose "Commit changes" then "Push and create PR"
+dev tickets      # fetch Jira tickets
+dev select       # select a ticket (stores metadata for branch/commit)
+dev branch       # create properly named branch
+dev commit       # guided commit message (opens editor)
+dev pr           # push and create PR (uses gh if available)
+dev workflow     # legacy interactive menu (full assistant)
+dev verify       # self-check: symlinks + secret scan
+dev init         # first-time guided setup (core, Jira, GitHub)
 ```
 
-### Individual Tools
+### Legacy Individual Tools
 
-You can also use the individual tools:
+Still available for direct use:
 
-- **jira-tool**: For ticket management
-- **github-tool**: For Git operations
+- `jira-tool` (interactive Jira)
+- `github-tool` (interactive Git/GitHub)
+- `dev-workflow` (integrated menu; superseded by `dev`)
 
 ## 🔧 Customization
 
@@ -147,11 +141,14 @@ Add local customizations:
 
 - ZSH: Create `~/.zshrc.local` (not tracked by git)
 - Git: Create `~/.gitconfig.local` (not tracked by git)
-  ```ini
-  [user]
-     name = Your Name
-     email = your.email@example.com
-  ```
+  
+  
+      ```ini
+      [user]
+         name = Your Name
+         email = your.email@example.com
+      ```
+
 - Neovim: Edit `~/dotfiles/config/nvim/init.lua`
 
 ## 📚 Components
@@ -178,6 +175,32 @@ Add local customizations:
 - macOS `security` command (pre-installed)
 - [GitHub CLI](https://cli.github.com/) (optional, for PR creation)
 - `curl` (for Jira API calls)
+
+## 🔐 Secret Management Quick Commands
+
+
+
+```bash
+bwstart                                 # unlock/login Bitwarden
+bwsecurekey "OpenAI API Key" OPENAI_API_KEY   # export key w/o history
+bwsecurerun "GitHub Token" GITHUB_TOKEN gh repo list
+bwloadfolder "API Keys"                 # bulk export folder entries
+```
+
+See `SECURITY.md` for comprehensive guidance.
+
+## 🧪 Safety Checks
+
+Secret scanning (heuristic):
+```bash
+tests/security/scan_secrets.sh
+```
+
+Git pre-commit hook (optional):
+```bash
+git config core.hooksPath .githooks
+```
+This runs the secret scan on every commit; bypass with `--no-verify` if needed.
 
 ## 🤝 Contributing
 

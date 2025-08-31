@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeo pipefail
 # filepath: /Users/ecohen/dotfiles/scripts/dev-tools/jira.sh
 
 ###############################################################################
@@ -8,9 +9,18 @@
 # Functions for interacting with Jira API
 ###############################################################################
 
-# Source core utilities if not already sourced
+# Source core utilities if not already sourced (resolve symlinks)
 if [[ -z "$CORE_SOURCED" ]]; then
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _resolve_script_dir_jira() {
+    local src="${BASH_SOURCE[0]}"; local dir target
+    while [ -h "$src" ]; do
+      dir="$(cd -P "$(dirname "$src")" && pwd)"
+      target="$(readlink "$src")"
+      [[ $target != /* ]] && src="$dir/$target" || src="$target"
+    done
+    cd -P "$(dirname "$src")" && pwd
+  }
+  script_dir="$(_resolve_script_dir_jira)"
   source "$script_dir/core.sh"
   CORE_SOURCED=true
 fi
@@ -28,8 +38,16 @@ setup_jira_config() {
   read -p "Jira email: " jira_email
   save_config "jira_email" "$jira_email"
 
-  read -p "Jira API token: " jira_token
-  save_config "jira_api_token" "$jira_token"
+  echo -n "Jira API token (will not echo, leave blank to keep existing / store in keychain): "
+  stty -echo; read jira_token; stty echo; echo ""
+  if [[ -n "$jira_token" ]]; then
+    # Offer to store securely in macOS keychain instead of config file
+    if command -v security >/dev/null 2>&1 && confirm "Store token in macOS keychain (recommended)?" "Y"; then
+      security add-generic-password -U -a "$USER" -s "jira_api_token" -w "$jira_token" >/dev/null 2>&1 || print_warning "Could not store token in keychain. Falling back to config file." && save_config "jira_api_token" "__KEYCHAIN__"
+    else
+      save_config "jira_api_token" "$jira_token"
+    fi
+  fi
 
   read -p "Jira project key (e.g., PROJ): " jira_project
   save_config "jira_project" "$jira_project"
@@ -39,8 +57,14 @@ setup_jira_config() {
 
 # Get authentication header for Jira API
 get_jira_auth_header() {
-  local email=$(get_config "jira_email" "")
-  local token=$(get_config "jira_api_token" "")
+  local email token stored
+  email=$(get_config "jira_email" "")
+  stored=$(get_config "jira_api_token" "")
+  if [[ "$stored" == "__KEYCHAIN__" ]] && command -v security >/dev/null 2>&1; then
+    token=$(security find-generic-password -a "$USER" -s jira_api_token -w 2>/dev/null || true)
+  else
+    token="$stored"
+  fi
 
   if [[ -z "$email" || -z "$token" ]]; then
     print_error "Jira credentials not configured"
@@ -68,7 +92,18 @@ get_jira_tickets() {
 
   # JQL query for todo tickets in current sprint
   local jql="project = $project AND sprint in openSprints() AND status = 'To Do' ORDER BY priority DESC"
-  local encoded_jql=$(echo "$jql" | sed 's/ /%20/g' | sed 's/=/%3D/g' | sed 's/"/%22/g' | sed "s/'/%27/g")
+  # URL encode JQL safely (macOS: use python if available)
+  local encoded_jql
+  if command -v python3 >/dev/null 2>&1; then
+    encoded_jql=$(python3 - <<'PY'
+import urllib.parse,os,sys
+print(urllib.parse.quote(os.environ['JQL']))
+PY
+)
+  else
+    # Fallback minimal encoding
+    encoded_jql=$(echo "$jql" | sed -E 's/ /%20/g; s/=/%3D/g; s/"/%22/g; s/'"'"'/%27/g')
+  fi
 
   # Call Jira API
   local auth_header=$(get_jira_auth_header)

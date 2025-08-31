@@ -1,3 +1,33 @@
+# Local-only overrides (user identity, private settings)
+home/.gitconfig.local
+home/.zshrc.local
+
+# Dev tools runtime config & caches
+*.log
+**/.cache/
+config/dev-tools/**
+!scripts/dev-tools/**
+
+# Generated backups
+*.bak.*
+*.RESET.*
+
+# Temporary files
+*.swp
+*.tmp
+*~
+
+# macOS noise
+.DS_Store
+
+# Node / Python / others (future use)
+node_modules/
+__pycache__/
+*.pyc
+
+# Bitwarden session exports (should never be committed, precautionary)
+BW_SESSION
+
 # Ignore sensitive files
 .env
 .env.local

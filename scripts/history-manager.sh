@@ -59,6 +59,15 @@ _add_history_ignore_patterns
 ##########################
 
 # Clean sensitive information from history - safe implementation
+_glob_to_regex() {
+  # Convert a minimal glob pattern to regex: escape regex metachars, then * -> .*
+  # Handles characters: [](){}.^$+?|\
+  local s="$1"
+  s=$(printf '%s' "$s" | sed -E 's/([][(){}.^$+?|\\])/\\\\\1/g')
+  s=$(printf '%s' "$s" | sed 's/\*/.*/g')
+  echo "$s"
+}
+
 histclean() {
   echo "🧹 Cleaning shell history of sensitive patterns..."
 
@@ -74,10 +83,7 @@ histclean() {
   # Build the grep pattern safely
   local GREP_PATTERN=""
   for pattern in "${_SENSITIVE_PATTERNS[@]}"; do
-    # Convert glob patterns to regular expressions
-    local regex_pattern=$(echo "$pattern" | sed 's/\*/\\*/g')
-    regex_pattern=$(echo "$regex_pattern" | sed 's/\*/.*/g')
-
+    local regex_pattern=$(_glob_to_regex "$pattern")
     if [[ -z "$GREP_PATTERN" ]]; then
       GREP_PATTERN="$regex_pattern"
     else
@@ -118,10 +124,7 @@ histaudit() {
   # Build the grep pattern safely
   local GREP_PATTERN=""
   for pattern in "${_SENSITIVE_PATTERNS[@]}"; do
-    # Convert glob patterns to regular expressions
-    local regex_pattern=$(echo "$pattern" | sed 's/\*/\\*/g')
-    regex_pattern=$(echo "$regex_pattern" | sed 's/\*/.*/g')
-
+    local regex_pattern=$(_glob_to_regex "$pattern")
     if [[ -z "$GREP_PATTERN" ]]; then
       GREP_PATTERN="$regex_pattern"
     else

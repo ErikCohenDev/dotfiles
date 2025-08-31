@@ -237,8 +237,15 @@ bwexportkey() {
   fi
 
   local ITEM_NAME=$1
-  # Default to item name, uppercased with spaces replaced by underscores
-  local ENV_VAR_NAME=${2:-$(echo "$ITEM_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')}
+  # Default to item name, uppercased with spaces replaced by underscores and sanitized
+  local ENV_VAR_NAME_RAW=${2:-$(echo "$ITEM_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')}
+  # Keep only A-Z, 0-9, and _
+  local ENV_VAR_NAME=$(echo "$ENV_VAR_NAME_RAW" | tr -cd 'A-Z0-9_')
+  # Must start with a letter or underscore
+  if ! printf '%s' "$ENV_VAR_NAME" | grep -Eq '^[A-Z_][A-Z0-9_]*$'; then
+    echo "❌ Invalid environment variable name derived from: '$ENV_VAR_NAME_RAW'" >&2
+    return 1
+  fi
 
   # Use a subshell to prevent the API key from appearing in history or ps output
   (
@@ -249,7 +256,8 @@ bwexportkey() {
     fi
 
     # Use eval to avoid the key appearing in ps output
-    eval "export $ENV_VAR_NAME='$API_KEY'"
+    eval "export $ENV_VAR_NAME='
+$API_KEY'"
   )
 
   # Only output success message if the key was set
@@ -274,7 +282,13 @@ bwsecurekey() {
   fi
 
   local ITEM_NAME=$1
-  local ENV_VAR_NAME=${2:-$(echo "$ITEM_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')}
+  local ENV_VAR_NAME_RAW=${2:-$(echo "$ITEM_NAME" | tr '[:lower:]' '[:upper:]' | tr ' ' '_')}
+  local ENV_VAR_NAME=$(echo "$ENV_VAR_NAME_RAW" | tr -cd 'A-Z0-9_')
+  if ! printf '%s' "$ENV_VAR_NAME" | grep -Eq '^[A-Z_][A-Z0-9_]*$'; then
+    echo "❌ Invalid environment variable name derived from: '$ENV_VAR_NAME_RAW'" >&2
+    HISTFILE=$HISTFILE_OLD
+    return 1
+  fi
 
   # Use process substitution to avoid temporary files
   local API_KEY=$(bwgetkey "$ITEM_NAME")
@@ -285,7 +299,8 @@ bwsecurekey() {
   fi
 
   # Export without showing in ps output
-  eval "export $ENV_VAR_NAME='$API_KEY'"
+  eval "export $ENV_VAR_NAME='
+$API_KEY'"
   unset API_KEY
 
   echo "🔒 Securely exported API key to \$${ENV_VAR_NAME}"

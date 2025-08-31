@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeo pipefail
 # filepath: /Users/ecohen/dotfiles/scripts/dev-tools/core.sh
 
 ###############################################################################
@@ -18,6 +19,7 @@ LOG_FILE="$CONFIG_DIR/dev-tools.log"
 mkdir -p "$CONFIG_DIR"
 mkdir -p "$CACHE_DIR"
 touch "$LOG_FILE"
+chmod 600 "$LOG_FILE" 2>/dev/null || true
 
 # Color definitions
 RED='\033[0;31m'
@@ -28,9 +30,12 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Log message with timestamp
+# Log message with timestamp (redact obvious secrets)
 log_message() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+  local msg="$1"
+  # Basic redaction for patterns like KEY=****, token: **** etc.
+  msg=$(echo "$msg" | sed -E 's/([A-Za-z0-9_]*(KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*=)[^ ]+/\1REDACTED/gI')
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$LOG_FILE"
 }
 
 # Print colored output
@@ -52,11 +57,17 @@ print_error() {
 }
 
 # Config management
+# Ensure essential dependencies for config helpers are present when used
 get_config() {
   local key="$1"
   local default="$2"
 
   if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "$default"
+    return
+  fi
+
+  if ! command_exists jq; then
     echo "$default"
     return
   fi
@@ -81,7 +92,12 @@ save_config() {
   local tmp_file=$(mktemp)
 
   # Update config
-  jq ".$key = \"$value\"" "$CONFIG_FILE" > "$tmp_file"
+  if command_exists jq; then
+    jq ".$key = \"$value\"" "$CONFIG_FILE" > "$tmp_file"
+  else
+    # Fallback: naive update (overwrites file with only this key)
+    printf '{"%s":"%s"}\n' "$key" "$value" > "$tmp_file"
+  fi
   mv "$tmp_file" "$CONFIG_FILE"
 
   chmod 600 "$CONFIG_FILE"
@@ -115,27 +131,15 @@ format_text() {
 }
 
 # Check if command exists
-command_exists() {
-  command -v "$1" >/dev/null 2>&1
-}
+command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 # Check required dependencies
 check_dependencies() {
-  local missing=0
-
-  for cmd in "$@"; do
-    if ! command_exists "$cmd"; then
-      print_error "Required command not found: $cmd"
-      missing=$((missing+1))
-    fi
-  done
-
-  if [[ $missing -gt 0 ]]; then
-    print_error "$missing required dependencies missing. Please install them and try again."
-    return 1
-  fi
-
-  return 0
+  local need=() missing=0
+  for cmd in "$@"; do command_exists "$cmd" || need+=("$cmd"); done
+  if ((${#need[@]})); then
+    for m in "${need[@]}"; do print_error "Missing dependency: $m"; done
+    print_error "Install the above before continuing."; return 1; fi
 }
 
 # Setup configuration interactively

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -Eeo pipefail
 # filepath: /Users/ecohen/dotfiles/scripts/dev-tools/workflow.sh
 
 ###############################################################################
@@ -8,8 +9,17 @@
 # Integrates Jira and GitHub tools into a cohesive workflow
 ###############################################################################
 
-# Get the directory of this script
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the directory of this script (resolve symlinks)
+_resolve_script_dir_workflow() {
+  local src="${BASH_SOURCE[0]}"; local dir target
+  while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    target="$(readlink "$src")"
+    [[ $target != /* ]] && src="$dir/$target" || src="$target"
+  done
+  cd -P "$(dirname "$src")" && pwd
+}
+script_dir="$(_resolve_script_dir_workflow)"
 
 # Source component scripts
 source "$script_dir/core.sh"

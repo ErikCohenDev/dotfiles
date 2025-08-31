@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeo pipefail
 # filepath: /Users/ecohen/dotfiles/scripts/dev-tools/github.sh
 
 ###############################################################################
@@ -8,15 +9,24 @@
 # Functions for interacting with GitHub/Git
 ###############################################################################
 
-# Source core utilities if not already sourced
+# Source core utilities if not already sourced (resolve symlinks)
 if [[ -z "$CORE_SOURCED" ]]; then
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _resolve_script_dir_git() {
+    local src="${BASH_SOURCE[0]}"; local dir target
+    while [ -h "$src" ]; do
+      dir="$(cd -P "$(dirname "$src")" && pwd)"
+      target="$(readlink "$src")"
+      [[ $target != /* ]] && src="$dir/$target" || src="$target"
+    done
+    cd -P "$(dirname "$src")" && pwd
+  }
+  script_dir="$(_resolve_script_dir_git)"
   source "$script_dir/core.sh"
   CORE_SOURCED=true
 fi
 
 # Check dependencies
-check_dependencies git || exit 1
+check_dependencies git jq || exit 1
 
 # GitHub configuration
 setup_github_config() {
@@ -53,13 +63,11 @@ create_branch() {
   local branch_prefix=$(get_config "branch_prefix" "feature")
 
   # Convert ticket title to kebab-case for branch name
-  local normalized_title=$(echo "$ticket_title" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:] ' | tr ' ' '-')
-  local branch_name="${branch_prefix}/${ticket_key}-${normalized_title}"
-
-  # If branch is too long, truncate it
-  if [[ ${#branch_name} -gt 60 ]]; then
-    branch_name="${branch_name:0:57}..."
-  fi
+  local normalized_title=$(echo "$ticket_title" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:] -' | tr ' ' '-')
+  normalized_title=$(echo "$normalized_title" | sed -E 's/-+/-/g; s/^-|-$//g')
+  local branch_raw="${branch_prefix}/${ticket_key}-${normalized_title}"
+  # Enforce length without adding ellipsis which creates invalid refs
+  local branch_name=${branch_raw:0:60}
 
   # Check if we're in a git repository
   if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
